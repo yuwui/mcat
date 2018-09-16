@@ -1,0 +1,2 @@
+https://github.com/yuwui/connect.py/archive/master.zip#egg=connect.py[performance]
+toml

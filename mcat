@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+
+"""
+Simple python script to download music from Monstercat.
+Copyright (C) 2018  Yui Kerver
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import sys
+import os
+import toml
+
+from connect import Client
+from connect.utils import DownloadLinkGenerator
+
+
+HOME = os.getenv('HOME')
+XDG_CONFIG_HOME = os.getenv('XDG_CONFIG_HOME', os.path.join(HOME, '.config'))
+CONFIG_HOME = os.path.join(XDG_CONFIG_HOME, 'mcat')
+CONFIG_FILE = os.path.join(CONFIG_HOME, 'config.toml')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Simple python script to download music from Monstercat.')
+
+    parser.add_argument('query', nargs='+')
+    parser.add_argument('-o', dest='out', default='.')
+
+    args = parser.parse_args()
+
+    if not os.path.exists(CONFIG_HOME):
+        os.makedirs(CONFIG_HOME)
+
+    if not os.path.exists(CONFIG_FILE):
+        raise Exception('Config not found!')
+
+    with open(CONFIG_FILE) as f:
+        cfg = toml.load(f)
+
+    client = Client()
+    gen = DownloadLinkGenerator()
+
+    login = cfg.get('login', None)
+
+    if login is None:
+        raise Exception('Credentials not in config!')
+
+    client.sign_in(login['email'], login['password'])
+
+    tracks = client.search_track(' '.join(args.query))
+
+    print('Found these tracks:')
+
+    for track in tracks:
+        print(f'\t{tracks.index(track) + 1}. {track.artists} - {track.title}')
+
+    print('Select one or more tracks to download (use X..Y to select multiple)')
+    select = input('> ')
+
+    try:
+        selected = [tracks[int(select) - 1]]
+    except ValueError:
+        if '..' in select:
+            split = select.split('..')
+
+            first = split[0]
+            second = split[1]
+
+            try:
+                selected = tracks[int(first)-1:int(second)]
+            except:
+                raise ValueError('Invalid number(s)')
+        else:
+            raise ValueError('Invalid number')
+
+    for track in selected:
+        dl = gen.track(track.albums[0].id, track.id, 'flac')
+
+        fn = os.path.join(args.out, track.artists, f'{track.title}.flac')
+
+        if os.path.exists(fn):
+            continue
+
+        print(f'Downloading: {track.artists} - {track.title}')
+
+        if not os.path.exists(os.path.join(args.out, track.artists)):
+            os.makedirs(os.path.join(args.out, track.artists))
+
+        with open(fn, 'wb') as f:
+            res = client.http.session.get(dl, stream=True)
+
+            length = res.headers.get('content-length', None)
+
+            downloaded = 0
+
+            if length is None:
+                f.write(res.content)
+            else:
+                length = int(length)
+                for chunk in res.iter_content(1024):
+                    downloaded += len(chunk)
+
+                    f.write(chunk)
+
+                    done = int(50 * downloaded / length)
+
+                    sys.stdout.write(f'\r[{"=" * done}{"-" * (50 - done)}]')
