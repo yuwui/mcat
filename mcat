@@ -113,7 +113,8 @@ if __name__ == '__main__':
             downloaded = 0
 
             if length is None:
-                f.write(res.content)
+                print('Failed to download file')
+                os.unlink(fn)
             else:
                 length = int(length)
                 for chunk in res.iter_content(1024):
