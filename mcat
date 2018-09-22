@@ -31,13 +31,14 @@ HOME = os.getenv('HOME')
 XDG_CONFIG_HOME = os.getenv('XDG_CONFIG_HOME', os.path.join(HOME, '.config'))
 CONFIG_HOME = os.path.join(XDG_CONFIG_HOME, 'mcat')
 CONFIG_FILE = os.path.join(CONFIG_HOME, 'config.toml')
-
+DEFAULT_OUT = os.path.join(HOME, 'Music')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Simple python script to download music from Monstercat.')
 
     parser.add_argument('query', nargs='+')
-    parser.add_argument('-o', dest='out', default='.')
+    parser.add_argument('--out', dest='out', default=DEFAULT_OUT)
+    parser.add_argument('--artist-dir', dest='artist_dir', action='store_true')
 
     args = parser.parse_args()
 
@@ -89,15 +90,20 @@ if __name__ == '__main__':
     for track in selected:
         dl = gen.track(track.albums[0].id, track.id, 'flac')
 
-        fn = os.path.join(args.out, track.artists, f'{track.title}.flac')
+        if args.artist_dir:
+            artist_path = os.path.join(args.out, track.artists)
+
+            fn = os.path.join(artist_path, f'{track.title}.flac')
+
+            if not os.path.exists(artist_path):
+                os.makedirs(artist_path)
+        else:
+            fn = os.path.join(args.out, f'{track.artists} - {track.title}.flac')
 
         if os.path.exists(fn):
             continue
 
         print(f'Downloading: {track.artists} - {track.title}')
-
-        if not os.path.exists(os.path.join(args.out, track.artists)):
-            os.makedirs(os.path.join(args.out, track.artists))
 
         with open(fn, 'wb') as f:
             res = client.http.session.get(dl, stream=True)
@@ -117,4 +123,6 @@ if __name__ == '__main__':
 
                     done = int(50 * downloaded / length)
 
-                    sys.stdout.write(f'\r[{"=" * done}{"-" * (50 - done)}]')
+                    sys.stdout.write(f'\r[{"=" * done}{"-" * (50 - done)}] {int(downloaded / 1024 / 1024)}MB/{int(length / 1024 / 1024)}MB')
+
+                print()
